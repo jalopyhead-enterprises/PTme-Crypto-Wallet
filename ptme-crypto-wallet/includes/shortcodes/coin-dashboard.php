@@ -24,9 +24,10 @@ function coin_dashboard_list_simple_shortcode() {
     $next_update = $last_cached_timestamp 
         ? $last_cached_timestamp + $cache_duration 
         : time() + $cache_duration;
-    $last_cached = $last_cached_timestamp 
-        ? date('F j, Y, g:i a', $last_cached_timestamp) 
-        : 'Not available';
+		$last_cached = $last_cached_timestamp 
+		    ? date('F j, Y, g:i:s a', $last_cached_timestamp) // Include seconds and lowercase am/pm
+		    : 'Not available';
+
 
     $output = '<div id="coin-dashboard-container" class="coin-dashboard" data-default-sort="alphabetical" data-default-order="asc" data-next-update="' . $next_update . '">';
 
@@ -41,22 +42,24 @@ function coin_dashboard_list_simple_shortcode() {
     $output .= '</div>';
 
     $output .= '<ul id="coin-dashboard-grid" class="coin-dashboard-grid">';
-    foreach ($filtered_coins as $coin) {
-        $coin_url = esc_url(get_post_type_archive_link('ptme_wallet_coin') . $coin['id'] . '/');
+foreach ($filtered_coins as $coin) {
+    $coin_url = esc_url(get_post_type_archive_link('ptme_wallet_coin') . $coin['id'] . '/');
 
-        $output .= '<li class="coin-dashboard-item" data-name="' . esc_attr($coin['name']) . '" ';
-        $output .= 'data-price-change="' . esc_attr(abs($coin['price_change_percentage_24h'])) . '" ';
-        $output .= 'data-market-cap="' . esc_attr($coin['market_cap']) . '">';
-        $output .= '<a href="' . $coin_url . '" class="coin-dashboard-link">';
-        $output .= '<img src="' . esc_url($coin['image']) . '" alt="' . esc_attr($coin['name']) . ' logo" class="coin-logo">';
-        $output .= '<h3 class="coin-name">' . esc_html($coin['name']) . ' (' . strtoupper(esc_html($coin['symbol'])) . ')</h3>';
-        $output .= '<p class="coin-price">Price: $' . format_with_minimum_decimals($coin['current_price'], 2) . '</p>';
-        $output .= '<p class="coin-market-cap">Market Cap: ' . format_large_number($coin['market_cap']) . '</p>';
-        $output .= '<p class="coin-change" style="color:' . ($coin['price_change_percentage_24h'] >= 0 ? 'green' : 'red') . ';">';
-        $output .= '24h Change: ' . number_format($coin['price_change_percentage_24h'], 2) . '%</p>';
-        $output .= '</a>';
-        $output .= '</li>';
-    }
+    $output .= '<li class="coin-dashboard-item" data-name="' . esc_attr($coin['name']) . '" ';
+    $output .= 'data-price="' . esc_attr($coin['current_price']) . '" ';
+    $output .= 'data-market-cap="' . esc_attr($coin['market_cap']) . '" ';
+    $output .= 'data-price-change="' . esc_attr(abs($coin['price_change_percentage_24h'])) . '">';
+    $output .= '<a href="' . $coin_url . '" class="coin-dashboard-link">';
+    $output .= '<img src="' . esc_url($coin['image']) . '" alt="' . esc_attr($coin['name']) . ' logo" class="coin-logo">';
+    $output .= '<h3 class="coin-name">' . esc_html($coin['name']) . ' (' . strtoupper(esc_html($coin['symbol'])) . ')</h3>';
+    $output .= '<p class="coin-price">Price: $' . esc_html($coin['current_price']) . '</p>';
+    $output .= '<p class="coin-market-cap">Market Cap: ' . esc_html($coin['market_cap']) . '</p>';
+    $output .= '<p class="coin-change" style="color:' . ($coin['price_change_percentage_24h'] >= 0 ? 'green' : 'red') . ';">';
+    $output .= '24h Change: ' . esc_html($coin['price_change_percentage_24h']) . '%</p>';
+    $output .= '</a>';
+    $output .= '</li>';
+}
+
     $output .= '</ul>';
 
     $output .= '<div class="coin-dashboard-footer">';
