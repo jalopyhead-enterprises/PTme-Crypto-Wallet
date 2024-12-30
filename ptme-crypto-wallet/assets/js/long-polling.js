@@ -1,6 +1,61 @@
 jQuery(document).ready(function ($) {
     console.log("Long Polling Initialized");
 
+    function formatMarketCap(number) {
+        if (number >= 1_000_000_000_000) {
+            return (number / 1_000_000_000_000).toFixed(2) + ' T';
+        } else if (number >= 1_000_000_000) {
+            return (number / 1_000_000_000).toFixed(2) + ' B';
+        } else if (number >= 1_000_000) {
+            return (number / 1_000_000).toFixed(2) + ' M';
+        } else {
+            return number.toLocaleString();
+        }
+    }
+
+    function formatPrice(price) {
+        if (price >= 1) {
+            // For whole numbers and larger values, show 2 decimal places
+            return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        } else {
+            // For smaller values (<1), show up to 4 decimal places
+            return price.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+        }
+    }
+
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp * 1000); // Convert seconds to milliseconds
+        const options = {
+            month: 'long',    // Full month name
+            day: 'numeric',   // Day of the month
+            year: 'numeric',  // Full year
+            hour: 'numeric',  // Hour
+            minute: '2-digit', // Minute
+            second: '2-digit', // Second
+            hour12: true      // Use 12-hour clock with lowercase am/pm
+        };
+        return date.toLocaleString(undefined, options).replace('AM', 'am').replace('PM', 'pm');
+    }
+
+    function formatInitialData() {
+        $('.coin-dashboard-item').each(function () {
+            const $marketCapElement = $(this).find('.coin-market-cap');
+            const $priceElement = $(this).find('.coin-price');
+
+            const rawMarketCap = parseFloat($(this).data('market-cap'));
+            if (!isNaN(rawMarketCap)) {
+                const formattedMarketCap = formatMarketCap(rawMarketCap);
+                $marketCapElement.text(`Market Cap: ${formattedMarketCap}`);
+            }
+
+            const rawPrice = parseFloat($(this).data('price'));
+            if (!isNaN(rawPrice)) {
+                const formattedPrice = formatPrice(rawPrice);
+                $priceElement.text(`Price: $${formattedPrice}`);
+            }
+        });
+    }
+
     function checkCacheAndUpdate() {
         const $dashboardContainer = $('#coin-dashboard-container');
         const nextUpdate = parseInt($dashboardContainer.data('next-update'), 10);
@@ -12,7 +67,6 @@ jQuery(document).ready(function ($) {
             return;
         }
 
-        // Poll the server for updated data
         console.log("Polling server for updated data...");
         $.post(paperTradeMeData.ajax_url, {
             action: 'fetch_updated_coin_data',
@@ -20,57 +74,47 @@ jQuery(document).ready(function ($) {
         })
             .done(function (response) {
                 if (response.success) {
-                    const { cache_ready, coins, last_updated } = response.data;
+                    const coins = response.data.coins;
+                    const $dashboardGrid = $('#coin-dashboard-grid');
+                    $dashboardGrid.empty();
 
-                    if (cache_ready) {
-                        console.log("Cache ready. Updating dashboard...");
+                    coins.forEach(coin => {
+                        const coinHtml = `
+                            <li class="coin-dashboard-item" data-market-cap="${coin.market_cap}" data-price="${coin.current_price}">
+                                <a href="/coin/${coin.id}/" class="coin-dashboard-link">
+                                    <img src="${coin.image}" alt="${coin.name} logo" class="coin-logo">
+                                    <h3 class="coin-name">${coin.name} (${coin.symbol.toUpperCase()})</h3>
+                                    <p class="coin-price">Price: $${formatPrice(coin.current_price)}</p>
+                                    <p class="coin-market-cap">Market Cap: ${formatMarketCap(coin.market_cap)}</p>
+                                    <p class="coin-change" style="color:${coin.price_change_percentage_24h >= 0 ? 'green' : 'red'};">
+                                        24h Change: ${coin.price_change_percentage_24h.toFixed(2)}%
+                                    </p>
+                                </a>
+                            </li>`;
+                        $dashboardGrid.append(coinHtml);
+                    });
 
-                        // Update the coin dashboard UI
-                        const $dashboardGrid = $('#coin-dashboard-grid');
-                        $dashboardGrid.empty();
+                    const formattedTime = formatTimestamp(response.data.last_updated);
+                    $('#last-updated-time').text(formattedTime); // Only update the timestamp
 
-                        coins.forEach(coin => {
-                            const coinHtml = `
-                                <li class="coin-dashboard-item">
-                                    <a href="/coin/${coin.id}/" class="coin-dashboard-link">
-                                        <img src="${coin.image}" alt="${coin.name} logo" class="coin-logo">
-                                        <h3 class="coin-name">${coin.name} (${coin.symbol.toUpperCase()})</h3>
-                                        <p class="coin-price">Price: $${coin.current_price.toFixed(2)}</p>
-                                        <p class="coin-market-cap">Market Cap: ${coin.market_cap.toLocaleString()}</p>
-                                        <p class="coin-change" style="color:${coin.price_change_percentage_24h >= 0 ? 'green' : 'red'};">
-                                            24h Change: ${coin.price_change_percentage_24h.toFixed(2)}%
-                                        </p>
-                                    </a>
-                                </li>`;
-                            $dashboardGrid.append(coinHtml);
-                        });
+                    $dashboardContainer.data('last-cached', response.data.last_updated);
 
-                        // Update the "Last Updated" timestamp
-                        const formattedTime = new Date(last_updated * 1000).toLocaleString(); // Convert timestamp to human-readable format
-                        $('#last-updated-time').text(`Last Updated: ${formattedTime}`);
-                        $dashboardContainer.data('last-cached', last_updated);
+                    const newNextUpdate = Math.floor(Date.now() / 1000) + 300;
+                    $dashboardContainer.data('next-update', newNextUpdate);
 
-                        // Recalculate the next update time and restart polling
-                        const newNextUpdate = Math.floor(Date.now() / 1000) + 300; // 5 minutes
-                        $dashboardContainer.data('next-update', newNextUpdate);
-
-                        console.log(`Next update scheduled at ${newNextUpdate}`);
-                        setTimeout(checkCacheAndUpdate, 3000); // Small delay before next check
-                    } else {
-                        console.log("Cache not ready yet. Retrying...");
-                        setTimeout(checkCacheAndUpdate, 3000); // Retry after 3 seconds
-                    }
+                    console.log(`Next update scheduled at ${newNextUpdate}`);
+                    setTimeout(checkCacheAndUpdate, 3000);
                 } else {
                     console.error("Failed to fetch updated coin data. Retrying...");
-                    setTimeout(checkCacheAndUpdate, 5000); // Retry after 5 seconds on failure
+                    setTimeout(checkCacheAndUpdate, 5000);
                 }
             })
             .fail(function () {
-                console.error("AJAX request for updated coin data failed. Retrying...");
-                setTimeout(checkCacheAndUpdate, 5000); // Retry after 5 seconds on failure
+                console.error("AJAX request failed. Retrying...");
+                setTimeout(checkCacheAndUpdate, 5000);
             });
     }
 
-    // Start the long polling process
+    formatInitialData();
     checkCacheAndUpdate();
 });
